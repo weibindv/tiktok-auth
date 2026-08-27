@@ -1,0 +1,17 @@
+/**
+ * tiktok-auth 插件统一入口（UTS）
+ *
+ * uni-app 通过 '@/<uni_modules>/tiktok-auth' 解析模块时，
+ * 必须存在此根入口文件（index.uts），否则报 "tiktok-auth not found"。
+ *
+ * 各平台实现位于 utssdk/app-android/index.uts 与 utssdk/app-ios/index.uts，
+ * 此处按平台条件编译导出同名 tiktokLogin。
+ */
+
+// #ifdef APP-ANDROID
+export { tiktokLogin, getWebAuthResult } from './utssdk/app-android/index.uts'
+// #endif
+
+// #ifdef APP-IOS
+export { tiktokLogin } from './utssdk/app-ios/index.uts'
+// #endif

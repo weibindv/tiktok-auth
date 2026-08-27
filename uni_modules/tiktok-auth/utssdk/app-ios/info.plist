@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- TikTok Client Key（SDK 内部读取）。
+	     ⚠️ 发布/上架前必须把下面占位符 YOUR_TIKTOK_CLIENT_KEY 替换成你自己的 Client Key，
+	     否则 iOS 授权拉起失败、且多用户共用同一 Scheme 会冲突。
+	     可用仓库根目录 scripts/replace_tiktok_key.sh 一键替换。 -->
+	<key>TikTokClientKey</key>
+	<string>YOUR_TIKTOK_CLIENT_KEY</string>
+
+	<!-- 用于检测 TikTok App 是否安装 -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>snssdk1233</string>
+		<string>snssdk1180</string>
+		<string>tiktokopensdk</string>
+	</array>
+
+	<!-- 授权回调 URL Scheme：必须为你的 Client Key
+	     回调 URL 格式：{clientKey}://response.bridge.tiktok.com/oauth
+	     ⚠️ 下面占位符同样需替换成你的真实 Client Key -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>TikTokAuth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>YOUR_TIKTOK_CLIENT_KEY</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

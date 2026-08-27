@@ -1,0 +1,129 @@
+import { TikTokLogin, TikTokLoginOptions, TikTokLoginSuccessResult, TikTokLoginFailResult } from '../interface.uts'
+import Intent from 'android.content.Intent'
+import TikTokAuthNative from 'uts.sdk.modules.tiktokAuth.TikTokAuthNative'
+
+// 注册中的 onActivityResult 回调（TikTok App 授权返回时触发）
+var resultCallback: ((requestCode: Int, resultCode: Int, data: Intent | null) => void) | null = null
+
+/**
+ * 兜底：自定义 scheme 回调（dramaplayhouse://）被 App.vue 捕获后，
+ * 传入重构成的 HTTPS 回调 URL，取回授权时生成的 codeVerifier（JSON 字符串）。
+ */
+export function getWebAuthResult(url: string): string {
+	const activity = UTSAndroid.getUniActivity()
+	if (activity == null) return ''
+	return TikTokAuthNative.getWebAuthResult(activity, url)
+}
+
+/**
+ * 发起 TikTok 授权登录（Android 实现）
+ * - 已安装 TikTok App：拉起 App。新版 TikTok 点"继续"后通过 redirect_uri
+ *   （App Link）返回，由 TikTokAuthCallbackActivity（onCreate/onNewIntent）接收；
+ *   旧版 TikTok 通过 setResult 返回，经 onActivityResult 接收（两种均已兼容）
+ * - 未安装：自动降级 Chrome Custom Tab 网页授权，结果经原生 CallbackActivity 回调
+ */
+export const tiktokLogin: TikTokLogin = function (options: TikTokLoginOptions) {
+	const activity = UTSAndroid.getUniActivity()
+	if (activity == null) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '当前无可用 Activity' } as TikTokLoginFailResult)
+		}
+		return
+	}
+	const clientKey = options.clientKey
+	const redirectUri = options.redirectUri
+	if (clientKey == '' || redirectUri == '') {
+		if (options.fail != null) {
+			options.fail({ errCode: 401, errMsg: 'clientKey / redirectUri 不能为空' } as TikTokLoginFailResult)
+		}
+		return
+	}
+	const scope = options.scope != null && options.scope != '' ? options.scope : 'user.info.basic,user.info.profile'
+	const language = options.language == null ? null : options.language
+	const autoAuthDisabled = options.autoAuthDisabled == null ? false : options.autoAuthDisabled
+
+	// 1. 注册 onActivityResult：接收 TikTok App 授权返回
+	//    注意：新版 TikTok 点"继续"后通过 redirect_uri（App Link）返回结果，
+	//    onActivityResult 只收到 RESULT_CANCELED+null，由原生层延迟判定，
+	//    不再直接解析为"用户取消"。redirect 结果由 CallbackActivity → 原生回调触发。
+	if (resultCallback != null) {
+		UTSAndroid.offAppActivityResult(resultCallback)
+	}
+	resultCallback = (requestCode: Int, resultCode: Int, data: Intent | null): void => {
+		console.log('TikTokAuth', 'onAppActivityResult requestCode=' + requestCode + ' resultCode=' + resultCode + ' data=' + data)
+		if (resultCallback != null) {
+			UTSAndroid.offAppActivityResult(resultCallback)
+			resultCallback = null
+		}
+		// 交原生层统一处理：兼容 setResult 返回数据的旧版 TikTok，
+		// 以及 redirect_uri App Link 返回的新版 TikTok（延迟判定）
+		TikTokAuthNative.handleActivityResult(activity, data, redirectUri, resultCode, (json: string): void => {
+			handleNativeResult(options, json)
+		})
+	}
+	UTSAndroid.onAppActivityResult(resultCallback!)
+
+	// 2. 发起授权；网页授权结果由原生 CallbackActivity → 回调触发
+	const sent: boolean = TikTokAuthNative.authorize(activity, clientKey, redirectUri, scope, language, autoAuthDisabled, (json: string): void => {
+		handleNativeResult(options, json)
+	})
+	if (!sent) {
+		if (resultCallback != null) {
+			UTSAndroid.offAppActivityResult(resultCallback)
+			resultCallback = null
+		}
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '拉起 TikTok 授权失败' } as TikTokLoginFailResult)
+		}
+	}
+}
+
+function handleNativeResult(options: TikTokLoginOptions, json: string): void {
+	let parsed: any | null = null
+	try {
+		parsed = JSON.parse(json)
+	} catch (e) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '解析授权结果失败' } as TikTokLoginFailResult)
+		}
+		return
+	}
+	if (parsed == null) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '解析授权结果失败' } as TikTokLoginFailResult)
+		}
+		return
+	}
+	const obj = parsed as UTSJSONObject
+	const code: number = (obj['code'] as number | null) ?? -2
+	if (code == 200) {
+		const authCode: string = (obj['authCode'] as string | null) ?? ''
+		const codeVerifier: string = (obj['codeVerifier'] as string | null) ?? ''
+		const state: string = (obj['state'] as string | null) ?? ''
+		// 原生返回逗号分隔字符串（统一双端格式）
+		const permsStr: string = (obj['permissions'] as string | null) ?? ''
+		const permissions: string[] = []
+		if (permsStr != '') {
+			const arr = permsStr.split(',')
+			for (let i = 0; i < arr.length; i++) {
+				const p = arr[i].trim()
+				if (p != '') {
+					permissions.push(p)
+				}
+			}
+		}
+		if (options.success != null) {
+			options.success({
+				authCode: authCode,
+				codeVerifier: codeVerifier,
+				state: state,
+				permissions: permissions
+			} as TikTokLoginSuccessResult)
+		}
+	} else {
+		const message: string = (obj['message'] as string | null) ?? ''
+		if (options.fail != null) {
+			options.fail({ errCode: code, errMsg: message } as TikTokLoginFailResult)
+		}
+	}
+}

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 检测 TikTok 是否安装：Android 11+ 需 queries 声明。
+         官方 SDK TikTokAppCheckUtil 依次检测 com.zhiliaoapp.musically 与 com.ss.android.ugc.trill，
+         缺少任一包名会导致已安装 TikTok 仍判定未安装，无法拉起 App。 -->
+    <queries>
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.zhiliaoapp.musically.go" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <!-- 未装 TikTok 时 SDK 降级 Chrome Custom Tab 网页授权：
+             Android 11+ 需声明 CustomTabsService，否则无法绑定浏览器提供 Custom Tab -->
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+    </queries>
+
+    <application>
+        <!-- WebAuth（Chrome Custom Tab）回调 Activity：拦截 TikTok 授权回跳地址。
+             ⚠️ 发布/上架前必须把下面占位符 YOUR_REDIRECT_HOST 替换成你自己的
+             redirect_uri 域名（不带 https:// 前缀、不带 path），且与 TikTok 后台登记的
+             Redirect URL 同域，否则网页授权完成后重定向无法被本 Activity 拦截。
+             可用仓库根目录 scripts/replace_tiktok_key.sh 一键替换。
+             注意：<data> 内不要声明 path/pathPrefix/pathPattern。
+             Android 12+ 只对不带 path 的 autoVerify intent-filter 执行 App Links 验证，
+             带 path 会导致系统跳过验证、链接无法拉起本 Activity。 -->
+        <activity
+            android:name="uts.sdk.modules.tiktokAuth.TikTokAuthCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleInstance"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="YOUR_REDIRECT_HOST" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

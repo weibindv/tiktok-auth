@@ -1,0 +1,44 @@
+/**
+ * TikTok 授权登录插件 - 跨平台接口定义
+ */
+
+/** 授权登录参数 */
+export type TikTokLoginOptions = {
+	/** TikTok Client Key（可在后端下发；iOS 端必须与 Info.plist 中 URL Scheme 一致） */
+	clientKey: string
+	/** 授权回调地址（TikTok 后台注册的 redirect_uri，默认 https://open-platform.tiktokapis.com/callback） */
+	redirectUri: string
+	/** 申请的权限范围，逗号分隔，默认 user.info.basic,user.info.profile */
+	scope?: string | null
+	/** 授权页语言（zh / en 等，可选） */
+	language?: string | null
+	/** 是否禁用 App 内授权（true=强制走网页授权），默认 false */
+	autoAuthDisabled?: boolean | null
+	/** 成功回调 */
+	success?: ((result: TikTokLoginSuccessResult) => void) | null
+	/** 失败回调 */
+	fail?: ((result: TikTokLoginFailResult) => void) | null
+}
+
+/** 授权成功返回（authCode 需提交到后端换取 token） */
+export type TikTokLoginSuccessResult = {
+	/** 授权码，后端用 auth_code + code_verifier + client_secret 换取 access_token */
+	authCode: string
+	/** PKCE code_verifier，需随 auth_code 一起提交后端 */
+	codeVerifier: string
+	/** 防 CSRF 的 state，可校验与发起时一致 */
+	state: string
+	/** 用户已授权的权限列表 */
+	permissions: string[]
+}
+
+/** 授权失败返回 */
+export type TikTokLoginFailResult = {
+	/** 错误码：-1 用户取消；-2 失败；401 参数错误 */
+	errCode: number
+	/** 错误描述 */
+	errMsg: string
+}
+
+/** 发起 TikTok 授权登录 */
+export type TikTokLogin = (options: TikTokLoginOptions) => void

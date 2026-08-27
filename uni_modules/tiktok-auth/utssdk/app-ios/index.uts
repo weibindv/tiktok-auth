@@ -1,0 +1,105 @@
+import { TikTokLogin, TikTokLoginOptions, TikTokLoginSuccessResult, TikTokLoginFailResult } from '../interface.uts'
+
+// 说明：iOS 混编 Swift 无包名概念，同一模块内直接使用类名 TikTokAuthNative，无需 import
+
+/**
+ * App 生命周期钩子：
+ * 1. applicationOpenURLOptions：URL Scheme 回调（{clientKey}://response.bridge.tiktok.com/oauth）
+ * 2. applicationContinueUserActivityRestorationHandler：Universal Link 续接（网页授权回跳必需）
+ * 授权完成 TikTok App 跳回本 App 时触发，转交 TikTok SDK 处理
+ */
+export class TikTokAuthHookProxy implements UTSiOSHookProxy {
+	applicationOpenURLOptions(app: UIApplication | null, url: URL, options: Map<UIApplication.OpenURLOptionsKey, any> | null = null): boolean {
+		return TikTokAuthNative.handleOpenURL(url)
+	}
+	applicationContinueUserActivityRestorationHandler(application: UIApplication | null, userActivity: NSUserActivity | null, restorationHandler: ((res: any[] | null) => void) | null = null): boolean {
+		if (userActivity == null) return false
+		return TikTokAuthNative.handleContinueUserActivity(userActivity)
+	}
+}
+
+/**
+ * 兜底：Universal Link 回跳时若 UTS continueUserActivity 钩子未被运行时转发，
+ * App.vue 从 plus.runtime.arguments 取到回调 URL 后调用本方法，
+ * 借 SDK 解析出 authCode，并取回授权时生成的 codeVerifier（JSON 字符串）。
+ * 与 Android 端 getWebAuthResult 行为一致。
+ */
+export function getWebAuthResult(url: string): string {
+	return TikTokAuthNative.getWebAuthResult(url)
+}
+
+/**
+ * 发起 TikTok 授权登录（iOS 实现）
+ * Client Key 由 Info.plist 的 TikTokClientKey 提供，无需传参
+ */
+export const tiktokLogin: TikTokLogin = function (options: TikTokLoginOptions) {
+	// 非空断言：UTS 编译调用 Swift 原生方法时，必须确保参数为非可选 String
+	const redirectUri: string = options.redirectUri!
+	if (redirectUri == '') {
+		if (options.fail != null) {
+			options.fail({ errCode: 401, errMsg: 'redirectUri 不能为空' } as TikTokLoginFailResult)
+		}
+		return
+	}
+	const scope: string = options.scope != null && options.scope != '' ? options.scope : 'user.info.basic,user.info.profile'
+	const isWebAuth: boolean = options.autoAuthDisabled == null ? false : options.autoAuthDisabled
+
+	const sent: boolean = TikTokAuthNative.authorize(redirectUri, scope, isWebAuth, (json: string): void => {
+		handleNativeResult(options, json)
+	})
+	if (!sent) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '拉起 TikTok 授权失败' } as TikTokLoginFailResult)
+		}
+	}
+}
+
+function handleNativeResult(options: TikTokLoginOptions, json: string): void {
+	let parsed: any | null = null
+	try {
+		parsed = JSON.parse(json)
+	} catch (e) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '解析授权结果失败' } as TikTokLoginFailResult)
+		}
+		return
+	}
+	if (parsed == null) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '解析授权结果失败' } as TikTokLoginFailResult)
+		}
+		return
+	}
+	const obj = parsed as UTSJSONObject
+	const code: number = (obj['code'] as number | null) ?? -2
+	if (code == 200) {
+		const authCode: string = (obj['authCode'] as string | null) ?? ''
+		const codeVerifier: string = (obj['codeVerifier'] as string | null) ?? ''
+		const state: string = (obj['state'] as string | null) ?? ''
+		// 原生返回逗号分隔字符串（统一双端格式）
+		const permsStr: string = (obj['permissions'] as string | null) ?? ''
+		const permissions: string[] = []
+		if (permsStr != '') {
+			const arr = permsStr.split(',')
+			for (let i = 0; i < arr.length; i++) {
+				const p = arr[i].trim()
+				if (p != '') {
+					permissions.push(p)
+				}
+			}
+		}
+		if (options.success != null) {
+			options.success({
+				authCode: authCode,
+				codeVerifier: codeVerifier,
+				state: state,
+				permissions: permissions
+			} as TikTokLoginSuccessResult)
+		}
+	} else {
+		const message: string = (obj['message'] as string | null) ?? ''
+		if (options.fail != null) {
+			options.fail({ errCode: code, errMsg: message } as TikTokLoginFailResult)
+		}
+	}
+}

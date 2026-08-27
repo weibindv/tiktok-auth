@@ -1,0 +1,12 @@
+{
+  "frameworks": [
+    "UIKit",
+    "Foundation",
+    "WebKit",
+    "SafariServices"
+  ],
+  "deploymentTarget": "12.0",
+  "validArchitectures": [
+    "arm64"
+  ]
+}
