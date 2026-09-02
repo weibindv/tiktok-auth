@@ -480,3 +480,14 @@ If you discover issues or have suggestions, please feedback via the following me
 **Copyright Notice**: This plugin is open source under the MIT License. The author reserves the right of final interpretation.
 
 **Disclaimer**: This plugin is for learning and research purposes only. Please read the TikTok Developer Agreement and relevant laws and regulations carefully before use.
+
+---
+
+## Support
+
+☕ If you find this plugin helpful is an encouragement!
+
+
+| Alipay | WeChat Pay | Buy Me a Coffee |
+| :---: | :---: | :---: |
+| <img src="./static/alpay.png" width="200" alt="Alipay QR Code" /> | <img src="./static/wechat.png" width="200" alt="WeChat QR Code" /> | <img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" width="200" alt="Buy Me a Coffee QR placeholder" /> |

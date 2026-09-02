@@ -1,4 +1,4 @@
-import { TikTokLogin, TikTokLoginOptions, TikTokLoginSuccessResult, TikTokLoginFailResult } from '../interface.uts'
+import { TikTokLogin, TikTokLoginOptions, TikTokLoginSuccessResult, TikTokLoginFailResult, TikTokShare, TikTokShareOptions, TikTokShareSuccessResult, TikTokShareFailResult } from '../interface.uts'
 import Intent from 'android.content.Intent'
 import TikTokAuthNative from 'uts.sdk.modules.tiktokAuth.TikTokAuthNative'
 
@@ -16,11 +16,20 @@ export function getWebAuthResult(url: string): string {
 }
 
 /**
+ * 兜底（Android 占位）：分享结果由 TikTok 显式拉起 TikTokAuthCallbackActivity
+ * （extras 带 type=4）投递，不经 URL，本方法在 Android 端不会真正被调用。
+ * 仅为 iOS/Android 导出同名函数保持绑定一致。
+ */
+export function getShareResult(url: string): string {
+	return '{"code":-2,"message":"结果已投递"}'
+}
+
+/**
  * 发起 TikTok 授权登录（Android 实现）
  * - 已安装 TikTok App：拉起 App。新版 TikTok 点"继续"后通过 redirect_uri
  *   （App Link）返回，由 TikTokAuthCallbackActivity（onCreate/onNewIntent）接收；
  *   旧版 TikTok 通过 setResult 返回，经 onActivityResult 接收（两种均已兼容）
- * - 未安装：自动降级 Chrome Custom Tab 网页授权，结果经原生 CallbackActivity 回调
+ * - 未安装：不做网页授权兜底，原生层直接回调"未安装 TikTok"错误提示
  */
 export const tiktokLogin: TikTokLogin = function (options: TikTokLoginOptions) {
 	const activity = UTSAndroid.getUniActivity()
@@ -124,6 +133,97 @@ function handleNativeResult(options: TikTokLoginOptions, json: string): void {
 		const message: string = (obj['message'] as string | null) ?? ''
 		if (options.fail != null) {
 			options.fail({ errCode: code, errMsg: message } as TikTokLoginFailResult)
+		}
+	}
+}
+
+/**
+ * 发起 TikTok 分享（Android 实现）
+ * - 原生层把本地文件/远程 URL 先写入公共 MediaStore（TikTok 只能读取公共存储中的媒体），
+ *   再按官方 Share Kit Bundle 协议拉起 TikTok SystemShareActivity
+ * - 分享结果由 TikTok 显式拉起 TikTokAuthCallbackActivity（extras type=4）投递；
+ *   与登录共用同一回调 Activity，原生层按 bundle 类型自动分流
+ * - 未安装 TikTok：原生直接回调"未安装 TikTok"错误（不做下载页/网页兜底）
+ */
+export const tiktokShare: TikTokShare = function (options: TikTokShareOptions) {
+	const activity = UTSAndroid.getUniActivity()
+	if (activity == null) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '当前无可用 Activity' } as TikTokShareFailResult)
+		}
+		return
+	}
+	const clientKey = options.clientKey == null ? '' : options.clientKey
+	if (clientKey == '') {
+		if (options.fail != null) {
+			options.fail({ errCode: 401, errMsg: 'clientKey 不能为空' } as TikTokShareFailResult)
+		}
+		return
+	}
+	const mediaType: string = options.mediaType == 'video' ? 'video' : 'image'
+	const greenScreen: boolean = options.greenScreen == null ? false : options.greenScreen
+	const state: string = options.state == null ? '' : options.state
+
+	const paths: string[] = options.paths == null ? [] : options.paths
+	if (paths.length == 0) {
+		if (options.fail != null) {
+			options.fail({ errCode: 401, errMsg: 'paths 不能为空' } as TikTokShareFailResult)
+		}
+		return
+	}
+	if (greenScreen && paths.length > 1) {
+		if (options.fail != null) {
+			options.fail({ errCode: 401, errMsg: '绿幕模式仅支持分享单个媒体' } as TikTokShareFailResult)
+		}
+		return
+	}
+	const pathsJson: string = JSON.stringify(paths)
+
+	const sent: boolean = TikTokAuthNative.shareFiles(activity, clientKey, mediaType, pathsJson, greenScreen, state, (json: string): void => {
+		handleShareResult(options, json)
+	})
+	if (!sent) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '拉起 TikTok 分享失败' } as TikTokShareFailResult)
+		}
+	}
+}
+
+function handleShareResult(options: TikTokShareOptions, json: string): void {
+	let parsed: any | null = null
+	try {
+		parsed = JSON.parse(json)
+	} catch (e) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '解析分享结果失败' } as TikTokShareFailResult)
+		}
+		return
+	}
+	if (parsed == null) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '解析分享结果失败' } as TikTokShareFailResult)
+		}
+		return
+	}
+	const obj = parsed as UTSJSONObject
+	const code: number = (obj['code'] as number | null) ?? -2
+	if (code == 200) {
+		const shareState: number = (obj['shareState'] as number | null) ?? 0
+		if (options.success != null) {
+			options.success({
+				shareState: shareState,
+				requestId: (obj['requestId'] as string | null) ?? '',
+				state: (obj['state'] as string | null) ?? ''
+			} as TikTokShareSuccessResult)
+		}
+	} else {
+		const message: string = (obj['message'] as string | null) ?? ''
+		if (options.fail != null) {
+			options.fail({
+				errCode: code,
+				errMsg: message,
+				shareState: (obj['shareState'] as number | null) ?? null
+			} as TikTokShareFailResult)
 		}
 	}
 }

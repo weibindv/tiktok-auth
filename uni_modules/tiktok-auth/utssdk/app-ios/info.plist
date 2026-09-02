@@ -7,7 +7,7 @@
 	     否则 iOS 授权拉起失败、且多用户共用同一 Scheme 会冲突。
 	     可用仓库根目录 scripts/replace_tiktok_key.sh 一键替换。 -->
 	<key>TikTokClientKey</key>
-	<string>YOUR_TIKTOK_CLIENT_KEY</string>
+	<string>sbawwsw3d3nxrgc4b3</string>
 
 	<!-- 用于检测 TikTok App 是否安装 -->
 	<key>LSApplicationQueriesSchemes</key>
@@ -16,6 +16,11 @@
 		<string>snssdk1180</string>
 		<string>tiktokopensdk</string>
 	</array>
+
+	<!-- 分享到 TikTok：需先保存媒体到系统相册（PHPhotoLibrary .addOnly 权限，
+	     仅写入不读取，App Store 审核说明按"Add photos only"用途即可） -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要将视频/图片保存到系统相册，以便分享到 TikTok</string>
 
 	<!-- 授权回调 URL Scheme：必须为你的 Client Key
 	     回调 URL 格式：{clientKey}://response.bridge.tiktok.com/oauth
@@ -27,7 +32,7 @@
 			<string>TikTokAuth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>YOUR_TIKTOK_CLIENT_KEY</string>
+				<string>Client Key</string>
 			</array>
 		</dict>
 	</array>

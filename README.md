@@ -482,3 +482,14 @@ PKCE（Proof Key for Code Exchange）是一种 OAuth 2.0 扩展机制，用于�
 **版权声明**：本插件基于 MIT 协议开源，作者保留最终解释权。
 
 **免责声明**：本插件仅供学习和研究使用，使用前请仔细阅读 TikTok 开发者协议和相关法律法规。
+
+---
+
+## 支持项目 (Support)
+
+☕ 如果您觉得本插件对您有所帮助，欢迎打赏作者！
+
+
+| 支付宝 (Alipay) | 微信支付 (WeChat) 
+| :---: | :---: | 
+| <img src="./static/alpay.png" width="200" alt="支付宝二维码" /> | <img src="./static/wechat.png" width="200" alt="微信二维码" /> 

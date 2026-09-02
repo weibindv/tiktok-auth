@@ -1,4 +1,4 @@
-import { TikTokLogin, TikTokLoginOptions, TikTokLoginSuccessResult, TikTokLoginFailResult } from '../interface.uts'
+import { TikTokLogin, TikTokLoginOptions, TikTokLoginSuccessResult, TikTokLoginFailResult, TikTokShare, TikTokShareOptions, TikTokShareSuccessResult, TikTokShareFailResult } from '../interface.uts'
 
 // 说明：iOS 混编 Swift 无包名概念，同一模块内直接使用类名 TikTokAuthNative，无需 import
 
@@ -12,8 +12,12 @@ export class TikTokAuthHookProxy implements UTSiOSHookProxy {
 	applicationOpenURLOptions(app: UIApplication | null, url: URL, options: Map<UIApplication.OpenURLOptionsKey, any> | null = null): boolean {
 		return TikTokAuthNative.handleOpenURL(url)
 	}
-	applicationContinueUserActivityRestorationHandler(application: UIApplication | null, userActivity: NSUserActivity | null, restorationHandler: ((res: any[] | null) => void) | null = null): boolean {
-		if (userActivity == null) return false
+	// 注意：方法签名必须与 DCloud 官方 UTSiOSHookProxy 声明完全一致（参数可空性与
+	// 闭包类型都要一致），否则 UTS 编译器会认为本类未正确实现协议，
+	// 导致钩子不被注册、Universal Link 回跳收不到（表现为"跳回 App 但没结果"）。
+	// 不要为了加空值保护而改动这里的类型，空值判断请在 Swift 侧做
+	// （TikTokAuthNative.handleContinueUserActivity 形参本身是可空的）。
+	applicationContinueUserActivityRestorationHandler(application: UIApplication | null, userActivity: NSUserActivity, restorationHandler: ((res?: any) => void) | null = null): boolean {
 		return TikTokAuthNative.handleContinueUserActivity(userActivity)
 	}
 }
@@ -26,6 +30,100 @@ export class TikTokAuthHookProxy implements UTSiOSHookProxy {
  */
 export function getWebAuthResult(url: string): string {
 	return TikTokAuthNative.getWebAuthResult(url)
+}
+
+/**
+ * 兜底：分享回跳 URL（Universal Link，URL 带 share_state/error_code/request_id 等
+ * 分享专用参数）被 App.vue 捕获后调用本方法，借 TikTokShareResponse 解析分享结果。
+ * 与登录 getWebAuthResult 同理：原生 completion 已触发时返回"结果已投递"避免重复。
+ */
+export function getShareResult(url: string): string {
+	return TikTokShareNative.getShareResult(url)
+}
+
+/**
+ * 发起 TikTok 分享（iOS 实现）
+ * - 原生层把本地文件/远程 URL 先保存到系统相册（需 NSPhotoLibraryAddUsageDescription），
+ *   取得 PHAsset localIdentifier 后拉起 TikTok 分享/发布页（Universal Link）
+ * - 结果回跳由 UTSiOSHookProxy → TikTokURLHandler → TikTokShareService 分发到回调；
+ *   钩子未触发时由 App.vue 从 plus.runtime.arguments 取 URL 调 getShareResult 兜底
+ * - 未安装 TikTok：原生直接回调"未安装 TikTok"错误（不做网页/商店兜底）
+ * Client Key 由 Info.plist 的 TikTokClientKey 提供，无需传参
+ */
+export const tiktokShare: TikTokShare = function (options: TikTokShareOptions) {
+	const redirectUri: string = (options.redirectUri == null || options.redirectUri == '') ? 'https://code.hk.lingchuang.co' : options.redirectUri!
+	const mediaType: string = options.mediaType == 'video' ? 'video' : 'image'
+	const greenScreen: boolean = options.greenScreen == null ? false : options.greenScreen
+	const state: string = options.state == null ? '' : options.state!
+
+	const paths: string[] = options.paths == null ? [] : options.paths
+	if (paths.length == 0) {
+		if (options.fail != null) {
+			options.fail({ errCode: 401, errMsg: 'paths 不能为空' } as TikTokShareFailResult)
+		}
+		return
+	}
+	if (greenScreen && paths.length > 1) {
+		if (options.fail != null) {
+			options.fail({ errCode: 401, errMsg: '绿幕模式仅支持分享单个媒体' } as TikTokShareFailResult)
+		}
+		return
+	}
+	// 路径列表序列化为 JSON 数组字符串传给原生层
+	// 注意：iOS 端 UTS runtime 的 JSON.stringify 桥接返回可空（String?），UTS 声明却为
+	// 非可空 string（编译器信任声明、生成时不自动解包），直接赋给 string 会在云打包时
+	// 报 "value of optional type 'String?' must be unwrapped to a value of type 'String'"。
+	// 因此经可空中间变量承接后再判空解包（Android/Kotlin 端不受影响，写法同样安全）。
+	const pathsJsonTmp: string | null = JSON.stringify(paths)
+	const pathsJson: string = pathsJsonTmp == null ? '[]' : pathsJsonTmp!
+
+	const sent: boolean = TikTokShareNative.shareFiles(redirectUri, mediaType, pathsJson, greenScreen, state, (json: string): void => {
+		handleShareResult(options, json)
+	})
+	if (!sent) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '拉起 TikTok 分享失败' } as TikTokShareFailResult)
+		}
+	}
+}
+
+function handleShareResult(options: TikTokShareOptions, json: string): void {
+	let parsed: any | null = null
+	try {
+		parsed = JSON.parse(json)
+	} catch (e) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '解析分享结果失败' } as TikTokShareFailResult)
+		}
+		return
+	}
+	if (parsed == null) {
+		if (options.fail != null) {
+			options.fail({ errCode: -2, errMsg: '解析分享结果失败' } as TikTokShareFailResult)
+		}
+		return
+	}
+	const obj = parsed as UTSJSONObject
+	const code: number = (obj['code'] as number | null) ?? -2
+	if (code == 200) {
+		const shareState: number = (obj['shareState'] as number | null) ?? 0
+		if (options.success != null) {
+			options.success({
+				shareState: shareState,
+				requestId: (obj['requestId'] as string | null) ?? '',
+				state: (obj['state'] as string | null) ?? ''
+			} as TikTokShareSuccessResult)
+		}
+	} else {
+		const message: string = (obj['message'] as string | null) ?? ''
+		if (options.fail != null) {
+			options.fail({
+				errCode: code,
+				errMsg: message,
+				shareState: (obj['shareState'] as number | null) ?? null
+			} as TikTokShareFailResult)
+		}
+	}
 }
 
 /**

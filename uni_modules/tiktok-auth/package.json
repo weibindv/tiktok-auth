@@ -1,14 +1,16 @@
 {
   "id": "tiktok-auth",
   "displayName": "tiktok-auth",
-  "version": "1.2.0",
-  "description": "TikTok 授权登录插件（Android / iOS），基于 TikTok OpenSDK 官方 SDK。客户端获取 authCode，服务端换取 access_token。",
+  "version": "1.4.0",
+  "description": "TikTok 授权登录 + 分享插件（Android / iOS），基于 TikTok OpenSDK 官方 SDK。登录：客户端获取 authCode，服务端换取 access_token；分享：将图片/视频先保存到系统相册/MediaStore 后拉起 TikTok 分享。",
   "keywords": [
     "TikTok",
     "登录",
     "授权",
+    "分享",
+    "Share Kit",
     "OAuth"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^4.25",
@@ -30,7 +32,7 @@
     },
     "declaration": {
       "ads": "无",
-      "data": "本插件用于 TikTok 授权登录，获取用户公开资料（头像、昵称、唯一标识 open_id）。授权完成后客户端仅持有 auth_code，需在服务端换取 access_token。",
+      "data": "本插件用于 TikTok 授权登录（获取用户公开资料头像/昵称/open_id，客户端仅持有 auth_code，由服务端换取 access_token）与分享（仅在用户主动发起分享时，将所选图片/视频保存到系统相册/MediaStore 后拉起 TikTok）。",
       "permissions": "无"
     },
     "npmurl": "",

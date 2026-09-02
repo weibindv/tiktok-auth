@@ -42,3 +42,59 @@ export type TikTokLoginFailResult = {
 
 /** 发起 TikTok 授权登录 */
 export type TikTokLogin = (options: TikTokLoginOptions) => void
+
+/**
+ * TikTok 分享媒体类型
+ * 说明：TikTok 只能读取"系统相册/MediaStore"中的媒体，插件原生层会自动把
+ * 传入的本地文件或远程 URL 先保存到相册，再拉起 TikTok 分享/发布页。
+ */
+export type TikTokShareMediaType = 'video' | 'image'
+
+/** TikTok 分享参数 */
+export type TikTokShareOptions = {
+	/** TikTok Client Key（Android 必传；iOS 走 Info.plist 的 TikTokClientKey 可留空） */
+	clientKey?: string | null
+	/** 分享媒体类型：video / image */
+	mediaType: TikTokShareMediaType
+	/**
+	 * 媒体路径列表（全部同类型）：
+	 * - 本地绝对路径：如 _doc/xxx.mp4 的绝对路径（plus.io 转换后）
+	 * - 远程地址：https:// 开头的 CDN URL（原生层自动下载后保存到相册）
+	 * 限制：图片 1~35 张；视频最多 12 个、单视频 3s~10min、仅 mp4；
+	 *      绿幕模式仅支持 1 个媒体
+	 */
+	paths: string[]
+	/** 分享回跳地址（Universal Link，与登录共用，默认 https://code.hk.lingchuang.co） */
+	redirectUri?: string | null
+	/** true=绿幕模式（将媒体作为背景，仅支持单视频/图片），默认 false */
+	greenScreen?: boolean | null
+	/** 请求状态标识（可选，原样回传） */
+	state?: string | null
+	/** 成功回调 */
+	success?: ((result: TikTokShareSuccessResult) => void) | null
+	/** 失败回调 */
+	fail?: ((result: TikTokShareFailResult) => void) | null
+}
+
+/** 分享成功返回 */
+export type TikTokShareSuccessResult = {
+	/** 分享状态码：20000 成功；20013 用户取消（此时走 fail，errCode=-1）；20015 已保存草稿 */
+	shareState: number
+	/** 本次请求 ID */
+	requestId: string
+	/** 发起时透传的 state */
+	state: string
+}
+
+/** 分享失败返回 */
+export type TikTokShareFailResult = {
+	/** 错误码：-1 用户取消；-2 分享失败/媒体准备失败；401 参数错误 */
+	errCode: number
+	/** 错误描述 */
+	errMsg: string
+	/** 原生分享状态码（可选，iOS 与 Android 的 code 含义略有差异） */
+	shareState?: number | null
+}
+
+/** 发起 TikTok 分享 */
+export type TikTokShare = (options: TikTokShareOptions) => void

@@ -5,13 +5,13 @@
  * 必须存在此根入口文件（index.uts），否则报 "tiktok-auth not found"。
  *
  * 各平台实现位于 utssdk/app-android/index.uts 与 utssdk/app-ios/index.uts，
- * 此处按平台条件编译导出同名 tiktokLogin。
+ * 此处按平台条件编译导出同名 tiktokLogin / tiktokShare / 结果兜底解析函数。
  */
 
 // #ifdef APP-ANDROID
-export { tiktokLogin, getWebAuthResult } from './utssdk/app-android/index.uts'
+export { tiktokLogin, getWebAuthResult, getShareResult, tiktokShare } from './utssdk/app-android/index.uts'
 // #endif
 
 // #ifdef APP-IOS
-export { tiktokLogin } from './utssdk/app-ios/index.uts'
+export { tiktokLogin, getWebAuthResult, getShareResult, tiktokShare } from './utssdk/app-ios/index.uts'
 // #endif

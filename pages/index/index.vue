@@ -63,33 +63,40 @@
 					title: '授权中...',
 					icon: 'none'
 				})
+				// 重要：tiktokLogin 是【回调式】API（返回 void，非 Promise），
+				// 结果通过 options.success / options.fail 返回，不要用 .then。
 				// clientKey/redirectUri/scope 以后端 tiktokConfig 下发为准；
-				// 注意：Android 端 redirectUri 必须与插件 AndroidManifest.xml 的
+				// Android 端 redirectUri 必须与插件 AndroidManifest.xml 的
 				// CallbackActivity intent-filter（https://code.hk.lingchuang.co）一致，
 				// 否则网页授权降级时收不到回调；iOS 端 clientKey 以插件 Info.plist 的 TikTokClientKey 为准
 				let data = {
 					clientKey: 'sbawwsw3d3nxrgc4b3',
 					redirectUri: 'https://code.hk.lingchuang.co',
 					scope: 'user.info.basic,user.info.profile',
-					language: 'en'
-				}
-				try {
-					tiktokLogin(data).then((res) => {
+					language: 'en',
+					success: (res) => {
+						this._tiktokDone = true
 						uni.hideLoading()
 						console.log('tiktokLogin success:', res)
 						this.tiktokToServer({
 							authCode: res.authCode,
 							codeVerifier: res.codeVerifier
 						})
-					}).catch((err) => {
-						console.error('tiktokLogin error:', err)
-						this.statusText = '授权失败：' + (err.message || '未知错误')
+					},
+					fail: (err) => {
+						this._tiktokDone = true
 						uni.hideLoading()
+						console.error('tiktokLogin error:', err)
+						this.statusText = '授权失败：' + (err.errMsg || '未知错误')
 						uni.showToast({
-							title: err.message || '授权失败',
+							title: err.errMsg || '授权失败',
 							icon: 'none'
 						})
-					})
+					}
+				}
+				try {
+					// tiktokLogin 返回 void（回调式），成功/失败在上面的 success/fail 中处理
+					tiktokLogin(data)
 				} catch (e) {
 					console.error('tiktokLogin invoke crash:', e)
 					uni.hideLoading()

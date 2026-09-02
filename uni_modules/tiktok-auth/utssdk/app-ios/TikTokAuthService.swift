@@ -30,19 +30,30 @@ class TikTokAuthService: NSObject, TikTokRequestResponseHandling {
         guard let authReq = request as? TikTokAuthRequest else { return false }
         self.completion = completion
         redirectURI = authReq.redirectURI
-        isWebAuth = !urlOpener.isTikTokInstalled() || authReq.isWebAuth
-        if isWebAuth {
-            return handleRequestViaWeb(request)
-        } else {
-            guard let url = buildOpenURL(from: authReq) else { return false }
-            (urlOpener as? UIApplication)?.open(url, options: [:]) { [weak self] success in
-                guard let self = self else { return }
-                if !success, let cancelURL = self.constructCancelURL(baseURL: authReq.redirectURI ?? "") {
-                    self.handleResponseURL(url: cancelURL)
-                }
+        // 需求变更：不再做网页授权兜底（不做向下兼容 web 登录），
+        // 也忽略 authReq.isWebAuth 强制网页授权参数 —— 一律走原生 TikTok App 授权。
+        isWebAuth = false
+        // 未安装 TikTok：直接回调错误，不再降级 ASWebAuthenticationSession
+        if !urlOpener.isTikTokInstalled() {
+            let err = NSError(
+                domain: "TikTokAuth",
+                code: -100,
+                userInfo: [NSLocalizedDescriptionKey: "未安装 TikTok，请先安装 TikTok 应用后重试"]
+            )
+            if let errURL = constructErrorURL(baseURL: authReq.redirectURI ?? "", error: err) {
+                // 经 handleResponseURL 走 completion，UTS 侧能拿到自定义 message
+                return handleResponseURL(url: errURL)
             }
-            return true
+            return false
         }
+        guard let url = buildOpenURL(from: authReq) else { return false }
+        (urlOpener as? UIApplication)?.open(url, options: [:]) { [weak self] success in
+            guard let self = self else { return }
+            if !success, let cancelURL = self.constructCancelURL(baseURL: authReq.redirectURI ?? "") {
+                self.handleResponseURL(url: cancelURL)
+            }
+        }
+        return true
     }
     
     private func handleRequestViaWeb(
@@ -67,7 +78,10 @@ class TikTokAuthService: NSObject, TikTokRequestResponseHandling {
         guard let authReq = req as? TikTokAuthRequest else { return nil }
         guard let webBaseURL = URL(string: TikTokInfo.webAuthIndexURL) else { return nil }
         guard let nativeBaseURL = URL(string: "\(TikTokInfo.universalLink)\(TikTokInfo.universalLinkAuthPath)") else { return nil }
-        let isWebAuth = authReq.isWebAuth || !urlOpener.isTikTokInstalled()
+        // 已禁用网页授权兜底：一律走原生 TikTok App 授权（nativeBaseURL）。
+        // webBaseURL 保留仅为避免编译器告警，实际不再使用。
+        _ = webBaseURL
+        let isWebAuth = false
         let baseURL = isWebAuth ? webBaseURL : nativeBaseURL
         guard var urlComps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
         urlComps.queryItems = isWebAuth ? authReq.convertToWebQueryParams() : authReq.convertToQueryParams()
